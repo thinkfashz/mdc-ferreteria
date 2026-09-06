@@ -8,6 +8,7 @@ import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
 import Select from "@/components/ui/Select";
+import ProductImageUpload from "@/components/products/ProductImageUpload";
 import Link from "next/link";
 import type { Category } from "@/types";
 
@@ -18,9 +19,12 @@ export default function NewProductPage() {
   const [form, setForm] = useState({
     name: "",
     description: "",
+    brand: "",
     price: "",
+    compareAtPrice: "",
     sku: "",
     barcode: "",
+    imageUrl: "",
     categoryId: "",
     stock: "0",
     minStock: "0",
@@ -53,7 +57,7 @@ export default function NewProductPage() {
         const data = await res.json();
         alert(data.error || "Error al crear producto");
       }
-    } catch (err) {
+    } catch {
       alert("Error de conexión");
     } finally {
       setLoading(false);
@@ -70,12 +74,17 @@ export default function NewProductPage() {
         </Link>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Nuevo Producto</h1>
-          <p className="text-gray-500 mt-1">Agrega un producto al catálogo</p>
+          <p className="text-gray-500 mt-1">Agrega un producto al catálogo público</p>
         </div>
       </div>
 
       <Card>
         <form onSubmit={handleSubmit} className="space-y-5">
+          <ProductImageUpload
+            value={form.imageUrl}
+            onChange={(imageUrl) => setForm({ ...form, imageUrl })}
+          />
+
           <Input
             id="name"
             label="Nombre del producto *"
@@ -84,6 +93,23 @@ export default function NewProductPage() {
             required
             placeholder="Ej: Martillo profesional"
           />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              id="brand"
+              label="Marca"
+              value={form.brand}
+              onChange={(e) => setForm({ ...form, brand: e.target.value })}
+              placeholder="Ej: Stanley"
+            />
+            <Select
+              id="categoryId"
+              label="Categoría"
+              value={form.categoryId}
+              onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+              options={categories.map((c) => ({ value: c.id, label: c.name }))}
+            />
+          </div>
 
           <Textarea
             id="description"
@@ -97,14 +123,27 @@ export default function NewProductPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               id="price"
-              label="Precio"
+              label="Precio de venta"
               type="number"
-              step="0.01"
+              step="1"
               min="0"
               value={form.price}
               onChange={(e) => setForm({ ...form, price: e.target.value })}
-              placeholder="0.00"
+              placeholder="0"
             />
+            <Input
+              id="compareAtPrice"
+              label="Precio anterior (opcional)"
+              type="number"
+              step="1"
+              min="0"
+              value={form.compareAtPrice}
+              onChange={(e) => setForm({ ...form, compareAtPrice: e.target.value })}
+              placeholder="Solo para ofertas reales"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               id="sku"
               label="SKU"
@@ -112,23 +151,14 @@ export default function NewProductPage() {
               onChange={(e) => setForm({ ...form, sku: e.target.value })}
               placeholder="SKU-001"
             />
+            <Input
+              id="barcode"
+              label="Código de barras"
+              value={form.barcode}
+              onChange={(e) => setForm({ ...form, barcode: e.target.value })}
+              placeholder="Código de barras o lectura de cámara"
+            />
           </div>
-
-          <Input
-            id="barcode"
-            label="Código de barras"
-            value={form.barcode}
-            onChange={(e) => setForm({ ...form, barcode: e.target.value })}
-            placeholder="Código de barras o lectura de cámara"
-          />
-
-          <Select
-            id="categoryId"
-            label="Categoría"
-            value={form.categoryId}
-            onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
-            options={categories.map((c) => ({ value: c.id, label: c.name }))}
-          />
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Input
@@ -182,9 +212,7 @@ export default function NewProductPage() {
               Guardar Producto
             </Button>
             <Link href="/products">
-              <Button type="button" variant="secondary">
-                Cancelar
-              </Button>
+              <Button type="button" variant="secondary">Cancelar</Button>
             </Link>
           </div>
         </form>
