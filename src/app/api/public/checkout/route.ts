@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { proxyPublicEdge } from "@/lib/mdc-public-edge";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -29,21 +30,17 @@ function isPersistenceUnavailableError(err: unknown) {
   return /database_url|environment variable|connectorerror|datasource|postgres|connection/i.test(message);
 }
 
-function persistenceUnavailableResponse() {
-  return NextResponse.json(
-    {
-      error: "El registro automático de pedidos está temporalmente fuera de servicio.",
-      code: "PERSISTENCE_UNAVAILABLE",
-    },
-    { status: 503, headers: CORS }
-  );
-}
-
 export async function POST(req: Request) {
-  if (!process.env.DATABASE_URL) return persistenceUnavailableResponse();
+  const body = await req.json().catch(() => ({}));
+
+  if (!process.env.DATABASE_URL) {
+    return proxyPublicEdge("checkout", req, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
 
   try {
-    const body = await req.json();
     const { name, phone, email, address, city, notes, items } = body;
 
     const cleanName = typeof name === "string" ? name.trim().slice(0, 120) : "";
@@ -199,7 +196,12 @@ export async function POST(req: Request) {
       );
     }
 
-    if (isPersistenceUnavailableError(err)) return persistenceUnavailableResponse();
+    if (isPersistenceUnavailableError(err)) {
+      return proxyPublicEdge("checkout", req, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+    }
 
     return NextResponse.json(
       {
