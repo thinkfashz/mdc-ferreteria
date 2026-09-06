@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Package, FolderTree, AlertTriangle, Warehouse, Plus, Camera, TrendingUp } from "lucide-react";
+import { Package, FolderTree, AlertTriangle, Warehouse, Plus, Camera, TrendingUp, Users, ShoppingBag } from "lucide-react";
 import Card from "@/components/ui/Card";
 import Link from "next/link";
-import { formatCurrency } from "@/lib/utils";
 import type { DashboardStats, Product } from "@/types";
 
 export default function DashboardPage() {
@@ -18,7 +17,7 @@ export default function DashboardPage() {
 
   const fetchStats = async () => {
     try {
-      const res = await fetch("/api/dashboard");
+      const res = await fetch("/api/dashboard", { cache: "no-store" });
       const data = await res.json();
       setStats(data.stats);
       setLowStock(data.lowStock || []);
@@ -38,18 +37,8 @@ export default function DashboardPage() {
   }
 
   const statCards = [
-    {
-      title: "Productos",
-      value: stats?.totalProducts || 0,
-      icon: Package,
-      href: "/products",
-    },
-    {
-      title: "Categorías",
-      value: stats?.totalCategories || 0,
-      icon: FolderTree,
-      href: "/products",
-    },
+    { title: "Productos", value: stats?.totalProducts || 0, icon: Package, href: "/products" },
+    { title: "Categorías", value: stats?.totalCategories || 0, icon: FolderTree, href: "/products" },
     {
       title: "Stock Bajo",
       value: stats?.lowStockProducts || 0,
@@ -57,28 +46,30 @@ export default function DashboardPage() {
       href: "/inventory",
       alert: (stats?.lowStockProducts || 0) > 0,
     },
+    { title: "Inventario Total", value: stats?.totalInventory || 0, icon: Warehouse, href: "/inventory" },
+    { title: "Visitas · 7 días", value: stats?.pageviews7d || 0, icon: TrendingUp, href: "/dashboard" },
+    { title: "Visitantes · 7 días", value: stats?.visitors7d || 0, icon: Users, href: "/dashboard" },
     {
-      title: "Inventario Total",
-      value: stats?.totalInventory || 0,
-      icon: Warehouse,
-      href: "/inventory",
+      title: "Pedidos nuevos",
+      value: stats?.newOrders || 0,
+      icon: ShoppingBag,
+      href: "/crm",
+      alert: (stats?.newOrders || 0) > 0,
     },
   ];
 
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-xs font-semibold tracking-[0.22em] uppercase text-[#F97316] mb-2">
-          Panel de control
-        </p>
+        <p className="text-xs font-semibold tracking-[0.22em] uppercase text-[#F97316] mb-2">Panel de control</p>
         <h1 className="text-2xl font-bold text-main">Resumen de tu ferretería</h1>
-        <p className="text-muted mt-1">Todo lo que pasa en tu inventario, de un vistazo.</p>
+        <p className="text-muted mt-1">Inventario, pedidos y actividad de la tienda pública en un solo lugar.</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((stat) => (
           <Link key={stat.title} href={stat.href}>
-            <Card className="group hover:border-[rgba(249,115,22,0.45)] transition-all cursor-pointer hover:-translate-y-0.5">
+            <Card className="group hover:border-[rgba(249,115,22,0.45)] transition-all cursor-pointer hover:-translate-y-0.5 h-full">
               <div className="flex items-center gap-4">
                 <div className="p-3 rounded-xl bg-accent-soft">
                   <stat.icon className={`w-6 h-6 ${stat.alert ? "text-yellow-400" : "text-[#F97316]"}`} />
@@ -92,6 +83,18 @@ export default function DashboardPage() {
           </Link>
         ))}
       </div>
+
+      <Card className="border-[rgba(249,115,22,0.16)]">
+        <div className="flex items-start gap-3">
+          <div className="p-2.5 rounded-xl bg-accent-soft"><TrendingUp className="w-5 h-5 text-[#F97316]" /></div>
+          <div>
+            <h2 className="font-semibold text-main">Estadísticas con consentimiento</h2>
+            <p className="text-sm text-muted mt-1">
+              Las visitas se registran de forma anónima únicamente cuando el cliente acepta estadísticas en la tienda. No se guarda IP ni información sensible.
+            </p>
+          </div>
+        </div>
+      </Card>
 
       {lowStock.length > 0 && (
         <Card>
