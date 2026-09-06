@@ -2,28 +2,43 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 /**
- * API pública para la tienda (landing). Solo productos activos.
- * GET /api/public/catalog?page=1&pageSize=12&search=&cat=<slug>&id=<productId>
- * Incluye stock y datos completos. CORS abierto para la tienda en :3002.
+ * API pública para la tienda.
+ * La base de datos es la fuente de verdad. Si no está disponible, la tienda
+ * activa su snapshot/cache local en vez de quedar vacía.
  */
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
+  "Cache-Control": "no-store, max-age=0",
 };
 
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS });
 }
 
+function databaseUnavailableResponse() {
+  return NextResponse.json(
+    {
+      error: "El inventario en vivo está temporalmente fuera de servicio.",
+      code: "DATABASE_UNAVAILABLE",
+    },
+    { status: 503, headers: CORS }
+  );
+}
+
 export async function GET(req: Request) {
+  if (!process.env.DATABASE_URL) {
+    return databaseUnavailableResponse();
+  }
+
   try {
     const { searchParams } = new URL(req.url);
-    const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
-    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "100")));
-    const search = searchParams.get("search") || "";
-    const cat = searchParams.get("cat") || "";
-    const id = searchParams.get("id") || "";
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "100", 10)));
+    const search = (searchParams.get("search") || "").trim();
+    const cat = (searchParams.get("cat") || "").trim();
+    const id = (searchParams.get("id") || "").trim();
 
     const where: Record<string, unknown> = { active: true };
 
@@ -59,7 +74,6 @@ export async function GET(req: Request) {
           name: p.name,
           slug: p.slug,
           description: p.description || "",
-          brand: (p as any).brand || "",
           price: p.price,
           stock: p.stock,
           minStock: p.minStock,
@@ -75,10 +89,24 @@ export async function GET(req: Request) {
         page,
         pageSize,
         totalPages: Math.ceil(total / pageSize),
+        source: "database",
       },
       { headers: CORS }
     );
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message?.slice(0, 300) || "Error" }, { status: 500, headers: CORS });
+  } catch (err: unknown) {
+    console.error("Public catalog error:", err);
+    const message = err instanceof Error ? err.message : String(err ?? "");
+
+    if (/database|sqlite|connector|environment variable|datasource/i.test(message)) {
+      return databaseUnavailableResponse();
+    }
+
+    return NextResponse.json(
+      {
+        error: "No pudimos consultar el inventario en este momento.",
+        code: "CATALOG_ERROR",
+      },
+      { status: 500, headers: CORS }
+    );
   }
 }
