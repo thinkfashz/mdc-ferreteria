@@ -3,43 +3,91 @@ import { prisma } from "@/lib/prisma";
 
 /**
  * Stock en vivo para la tienda. GET /api/public/stock?ids=a,b,c
- * Devuelve { [id]: { stock, price, updatedAt } } — liviano para polling.
+ * Acepta referencias por id, slug o SKU y devuelve aliases para que el
+ * storefront pueda conservar una identidad pública estable.
  */
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
+  "Cache-Control": "no-store, max-age=0",
 };
 
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS });
 }
 
+function unavailable() {
+  return NextResponse.json(
+    {
+      error: "El stock en vivo está temporalmente fuera de servicio.",
+      code: "DATABASE_UNAVAILABLE",
+    },
+    { status: 503, headers: CORS }
+  );
+}
+
 export async function GET(req: Request) {
+  if (!process.env.DATABASE_URL) return unavailable();
+
   try {
     const { searchParams } = new URL(req.url);
     const idsParam = searchParams.get("ids") || "";
-    const ids = idsParam.split(",").map(s => s.trim()).filter(Boolean).slice(0, 100);
+    const refs = idsParam
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 100);
 
-    const where = ids.length ? { id: { in: ids }, active: true } : { active: true };
+    const where = refs.length
+      ? {
+          active: true,
+          OR: [
+            { id: { in: refs } },
+            { slug: { in: refs } },
+            { sku: { in: refs } },
+          ],
+        }
+      : { active: true };
 
     const rows = await prisma.product.findMany({
       where,
-      select: { id: true, stock: true, price: true, updatedAt: true },
+      select: {
+        id: true,
+        slug: true,
+        sku: true,
+        stock: true,
+        price: true,
+        updatedAt: true,
+      },
     });
 
     const map: Record<string, { stock: number; price: number; updatedAt: string }> = {};
     for (const r of rows) {
-      map[r.id] = { stock: r.stock, price: r.price, updatedAt: r.updatedAt.toISOString() };
+      const payload = {
+        stock: r.stock,
+        price: r.price,
+        updatedAt: r.updatedAt.toISOString(),
+      };
+      map[r.id] = payload;
+      map[r.slug] = payload;
+      if (r.sku) map[r.sku] = payload;
     }
 
-    return NextResponse.json({ stock: map, ts: Date.now() }, {
-      headers: {
-        ...CORS,
-        "Cache-Control": "no-store",
-      },
-    });
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message?.slice(0, 300) || "Error" }, { status: 500, headers: CORS });
+    return NextResponse.json(
+      { stock: map, ts: Date.now(), source: "database" },
+      { headers: CORS }
+    );
+  } catch (err: unknown) {
+    console.error("Public stock error:", err);
+    const message = err instanceof Error ? err.message : String(err ?? "");
+    if (/database|sqlite|connector|environment variable|datasource/i.test(message)) {
+      return unavailable();
+    }
+
+    return NextResponse.json(
+      { error: "No pudimos consultar el stock en este momento.", code: "STOCK_ERROR" },
+      { status: 500, headers: CORS }
+    );
   }
 }
