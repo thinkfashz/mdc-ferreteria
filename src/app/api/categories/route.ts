@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/utils";
+import { requireAdmin } from "@/lib/require-admin";
 
 export async function GET() {
+  const denied = await requireAdmin();
+  if (denied) return denied;
+
   const categories = await prisma.category.findMany({
     orderBy: { order: "asc" },
     include: { _count: { select: { products: true } } },
@@ -11,6 +15,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const denied = await requireAdmin();
+  if (denied) return denied;
+
   try {
     const body = await req.json();
     const { name, description, order } = body;
@@ -20,7 +27,6 @@ export async function POST(req: Request) {
     }
 
     const slug = slugify(name);
-
     const existing = await prisma.category.findUnique({ where: { slug } });
     if (existing) {
       return NextResponse.json({ error: "Ya existe una categoría con ese nombre" }, { status: 400 });
@@ -42,6 +48,9 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
+  const denied = await requireAdmin();
+  if (denied) return denied;
+
   try {
     const body = await req.json();
     const { id, name, description, order } = body;
@@ -75,6 +84,9 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const denied = await requireAdmin();
+  if (denied) return denied;
+
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
