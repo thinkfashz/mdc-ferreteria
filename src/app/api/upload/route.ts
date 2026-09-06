@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createHash } from "crypto";
+import { requireAdmin } from "@/lib/require-admin";
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const ALLOWED_TYPES = new Set([
@@ -12,6 +13,9 @@ const ALLOWED_TYPES = new Set([
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  const denied = await requireAdmin();
+  if (denied) return denied;
+
   try {
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME || "disghf6xc";
     const apiKey = process.env.CLOUDINARY_API_KEY;
