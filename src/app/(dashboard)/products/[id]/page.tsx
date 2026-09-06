@@ -8,6 +8,7 @@ import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
 import Select from "@/components/ui/Select";
+import ProductImageUpload from "@/components/products/ProductImageUpload";
 import Link from "next/link";
 import type { Category } from "@/types";
 
@@ -20,9 +21,12 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
   const [form, setForm] = useState({
     name: "",
     description: "",
+    brand: "",
     price: "",
+    compareAtPrice: "",
     sku: "",
     barcode: "",
+    imageUrl: "",
     categoryId: "",
     stock: "",
     minStock: "",
@@ -39,9 +43,12 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
       setForm({
         name: product.name || "",
         description: product.description || "",
+        brand: product.brand || "",
         price: product.price?.toString() || "",
+        compareAtPrice: product.compareAtPrice?.toString() || "",
         sku: product.sku || "",
         barcode: product.barcode || "",
+        imageUrl: product.imageUrl || "",
         categoryId: product.categoryId || "",
         stock: product.stock?.toString() || "0",
         minStock: product.minStock?.toString() || "0",
@@ -49,9 +56,9 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
         featured: product.featured || false,
         active: product.active ?? true,
       });
-      setCategories(cats);
+      setCategories(Array.isArray(cats) ? cats : []);
       setFetching(false);
-    });
+    }).catch(() => setFetching(false));
   }, [id]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -91,18 +98,21 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center gap-4">
         <Link href="/products">
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
+          <Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4" /></Button>
         </Link>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Editar Producto</h1>
-          <p className="text-gray-500 mt-1">Actualiza la información del producto</p>
+          <p className="text-gray-500 mt-1">Los cambios se reflejan en la tienda pública</p>
         </div>
       </div>
 
       <Card>
         <form onSubmit={handleSubmit} className="space-y-5">
+          <ProductImageUpload
+            value={form.imageUrl}
+            onChange={(imageUrl) => setForm({ ...form, imageUrl })}
+          />
+
           <Input
             id="name"
             label="Nombre del producto *"
@@ -110,6 +120,23 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             required
           />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              id="brand"
+              label="Marca"
+              value={form.brand}
+              onChange={(e) => setForm({ ...form, brand: e.target.value })}
+              placeholder="Ej: Stanley"
+            />
+            <Select
+              id="categoryId"
+              label="Categoría"
+              value={form.categoryId}
+              onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+              options={categories.map((c) => ({ value: c.id, label: c.name }))}
+            />
+          </div>
 
           <Textarea
             id="description"
@@ -122,35 +149,39 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               id="price"
-              label="Precio"
+              label="Precio de venta"
               type="number"
-              step="0.01"
+              step="1"
               min="0"
               value={form.price}
               onChange={(e) => setForm({ ...form, price: e.target.value })}
             />
+            <Input
+              id="compareAtPrice"
+              label="Precio anterior (opcional)"
+              type="number"
+              step="1"
+              min="0"
+              value={form.compareAtPrice}
+              onChange={(e) => setForm({ ...form, compareAtPrice: e.target.value })}
+              placeholder="Solo para ofertas reales"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               id="sku"
               label="SKU"
               value={form.sku}
               onChange={(e) => setForm({ ...form, sku: e.target.value })}
             />
+            <Input
+              id="barcode"
+              label="Código de barras"
+              value={form.barcode}
+              onChange={(e) => setForm({ ...form, barcode: e.target.value })}
+            />
           </div>
-
-          <Input
-            id="barcode"
-            label="Código de barras"
-            value={form.barcode}
-            onChange={(e) => setForm({ ...form, barcode: e.target.value })}
-          />
-
-          <Select
-            id="categoryId"
-            label="Categoría"
-            value={form.categoryId}
-            onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
-            options={categories.map((c) => ({ value: c.id, label: c.name }))}
-          />
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Input
@@ -179,7 +210,11 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
                 { value: "kg", label: "Kilogramo" },
                 { value: "lt", label: "Litro" },
                 { value: "m", label: "Metro" },
+                { value: "m2", label: "Metro cuadrado" },
+                { value: "m3", label: "Metro cúbico" },
                 { value: "caja", label: "Caja" },
+                { value: "par", label: "Par" },
+                { value: "docena", label: "Docena" },
               ]}
             />
           </div>
@@ -207,14 +242,9 @@ export default function EditProductPage({ params }: { params: Promise<{ id: stri
 
           <div className="flex gap-3 pt-4">
             <Button type="submit" loading={loading}>
-              <Save className="w-4 h-4 mr-2" />
-              Actualizar Producto
+              <Save className="w-4 h-4 mr-2" /> Actualizar Producto
             </Button>
-            <Link href="/products">
-              <Button type="button" variant="secondary">
-                Cancelar
-              </Button>
-            </Link>
+            <Link href="/products"><Button type="button" variant="secondary">Cancelar</Button></Link>
           </div>
         </form>
       </Card>
