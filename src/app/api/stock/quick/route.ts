@@ -1,120 +1,135 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/utils";
+import { requireAdmin } from "@/lib/require-admin";
 
 export async function POST(req: Request) {
+  const denied = await requireAdmin();
+  if (denied) return denied;
+
   try {
     const body = await req.json();
     const { code, name, brand, description, imageUrl, category, quantity, type, reason, price } = body;
+    const cleanCode = code ? String(code).trim().slice(0, 160) : "";
+    const cleanName = name ? String(name).trim().slice(0, 180) : "";
+    const isAiItem = !cleanCode && !!cleanName;
+    const qty = Math.floor(Number(quantity || 1));
+    const movementType = type === "out" ? "out" : "in";
 
-    const isAiItem = !code && !!name;
-
-    if (!code && !isAiItem) {
-      return NextResponse.json({ error: "Código es requerido" }, { status: 400 });
+    if (!cleanCode && !isAiItem) {
+      return NextResponse.json({ error: "Código o nombre es requerido" }, { status: 400 });
+    }
+    if (!Number.isFinite(qty) || qty <= 0 || qty > 9999) {
+      return NextResponse.json({ error: "Cantidad inválida" }, { status: 400 });
     }
 
-    // Productos identificados por IA: se busca por nombre normalizado para evitar duplicados
-    let product = null as any;
-    if (code) {
-      product = await prisma.product.findFirst({
-        where: {
-          OR: [
-            { barcode: code },
-            { sku: code },
-          ],
-        },
-        include: { category: true },
-      });
-    } else if (name) {
-      product = await prisma.product.findFirst({
-        where: { name: { contains: name.slice(0, 40) } },
-        include: { category: true },
-      });
-    }
-
-    if (!product) {
-      const productName = name || `Producto ${code || "sin codigo"}`;
-      const slug = slugify(productName) + "-" + Date.now().toString(36);
-
-      let categoryId: string | undefined;
-      if (category) {
-        const catSlug = slugify(category);
-        let existingCat = await prisma.category.findUnique({ where: { slug: catSlug } });
-        if (!existingCat) {
-          existingCat = await prisma.category.create({
-            data: {
-              name: category,
-              slug: catSlug,
-            },
+    const result = await prisma.$transaction(async (tx) => {
+      let product = cleanCode
+        ? await tx.product.findFirst({
+            where: { OR: [{ barcode: cleanCode }, { sku: cleanCode }] },
+            include: { category: true },
+          })
+        : await tx.product.findFirst({
+            where: { name: { contains: cleanName.slice(0, 80), mode: "insensitive" } },
+            include: { category: true },
           });
+
+      if (!product) {
+        if (movementType === "out") throw new Error("PRODUCT_NOT_FOUND");
+
+        const productName = cleanName || `Producto ${cleanCode || "sin código"}`;
+        let categoryId: string | undefined;
+
+        if (category) {
+          const categoryName = String(category).trim().slice(0, 100);
+          const catSlug = slugify(categoryName);
+          const existingCat = await tx.category.upsert({
+            where: { slug: catSlug },
+            update: { name: categoryName },
+            create: { name: categoryName, slug: catSlug },
+          });
+          categoryId = existingCat.id;
         }
-        categoryId = existingCat.id;
+
+        const parsedPrice = Math.max(0, Number(price) || 0);
+        product = await tx.product.create({
+          data: {
+            name: productName,
+            slug: `${slugify(productName)}-${Date.now().toString(36)}`,
+            description: description ? String(description).trim().slice(0, 1000) : null,
+            brand: brand ? String(brand).trim().slice(0, 120) : null,
+            barcode: cleanCode || null,
+            sku: cleanCode || null,
+            imageUrl: imageUrl ? String(imageUrl).trim().slice(0, 1000) : null,
+            categoryId: categoryId || null,
+            price: parsedPrice,
+            stock: 0,
+            minStock: 1,
+            unit: "pieza",
+          },
+          include: { category: true },
+        });
       }
 
-      const parsedPrice = parseFloat(price);
-      product = await prisma.product.create({
-        data: {
-          name: productName,
-          slug,
-          description: description || `${brand ? brand + " - " : ""}${productName}`,
-          barcode: code || null,
-          sku: code || null,
-          imageUrl: imageUrl || null,
-          categoryId: categoryId || null,
-          price: !isNaN(parsedPrice) && parsedPrice > 0 ? parsedPrice : 0,
-          stock: 0,
-          minStock: 1,
-          unit: "pieza",
-        },
-        include: { category: true },
-      });
-    }
+      if (movementType === "out" && product.stock < qty) {
+        throw new Error(`STOCK_CONFLICT|${product.stock}`);
+      }
 
-    const qty = parseInt(quantity) || 1;
-    const stockChange = type === "out" ? -qty : qty;
+      const stockChange = movementType === "out" ? -qty : qty;
+      const cleanReason = reason
+        ? String(reason).trim().slice(0, 500)
+        : `Escaneo: ${cleanCode || product.name}`;
 
-    await prisma.$transaction(async (tx) => {
       await tx.stockMovement.create({
         data: {
-          productId: product!.id,
-          quantity: qty,
-          type: type === "out" ? "out" : "in",
-          reason: reason || `Escaneo: ${code || product!.name}`,
-          reference: code || null,
+          productId: product.id,
+          quantity: stockChange,
+          type: movementType,
+          reason: cleanReason,
+          reference: cleanCode || null,
         },
       });
 
       await tx.product.update({
-        where: { id: product!.id },
+        where: { id: product.id },
         data: { stock: { increment: stockChange } },
       });
 
       await tx.inventoryEntry.create({
         data: {
-          productId: product!.id,
+          productId: product.id,
           quantity: qty,
-          type: type === "out" ? "exit" : "entry",
-          notes: reason || `Escaneo rápido: ${code || product!.name}`,
+          type: movementType === "out" ? "exit" : "entry",
+          notes: cleanReason,
         },
       });
-    });
 
-    const updatedProduct = await prisma.product.findUnique({
-      where: { id: product.id },
-      include: { category: true },
+      const updatedProduct = await tx.product.findUnique({
+        where: { id: product.id },
+        include: { category: true },
+      });
+
+      return { updatedProduct, movementType };
     });
 
     return NextResponse.json({
       success: true,
-      product: updatedProduct,
-      action: type === "out" ? "Salida" : "Entrada",
+      product: result.updatedProduct,
+      action: result.movementType === "out" ? "Salida" : "Entrada",
       quantity: qty,
     });
   } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "PRODUCT_NOT_FOUND") {
+      return NextResponse.json({ error: "No existe un producto para registrar esta salida" }, { status: 404 });
+    }
+    if (message.startsWith("STOCK_CONFLICT|")) {
+      return NextResponse.json(
+        { error: `Stock insuficiente. Disponible: ${message.split("|")[1] || 0}` },
+        { status: 409 }
+      );
+    }
     console.error("Quick stock error:", error);
-    return NextResponse.json(
-      { error: "Error al guardar stock" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error al guardar stock" }, { status: 500 });
   }
 }
