@@ -3,7 +3,9 @@ export interface Product {
   name: string;
   slug: string;
   description?: string | null;
+  brand?: string | null;
   price: number;
+  compareAtPrice?: number | null;
   sku?: string | null;
   barcode?: string | null;
   imageUrl?: string | null;
@@ -86,4 +88,7 @@ export interface DashboardStats {
   totalCategories: number;
   lowStockProducts: number;
   totalInventory: number;
+  pageviews7d: number;
+  visitors7d: number;
+  newOrders: number;
 }
