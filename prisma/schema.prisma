@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -29,26 +29,28 @@ model Category {
 }
 
 model Product {
-  id          String   @id @default(cuid())
-  name        String
-  slug        String   @unique
-  description String?
-  price       Float    @default(0)
-  sku         String?  @unique
-  barcode     String?
-  imageUrl    String?
-  images      String   @default("[]")
-  categoryId  String?
-  category    Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  stock       Int      @default(0)
-  minStock    Int      @default(0)
-  unit        String   @default("pieza")
-  active      Boolean  @default(true)
-  featured    Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  inventory   InventoryEntry[]
-  stockMoves  StockMovement[]
+  id             String   @id @default(cuid())
+  name           String
+  slug           String   @unique
+  description    String?
+  brand          String?
+  price          Float    @default(0)
+  compareAtPrice Float?
+  sku            String?  @unique
+  barcode        String?
+  imageUrl       String?
+  images         String   @default("[]")
+  categoryId     String?
+  category       Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  stock          Int      @default(0)
+  minStock       Int      @default(0)
+  unit           String   @default("pieza")
+  active         Boolean  @default(true)
+  featured       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  inventory      InventoryEntry[]
+  stockMoves     StockMovement[]
 }
 
 model InventoryEntry {
@@ -95,29 +97,39 @@ model Setting {
 model Customer {
   id        String   @id @default(cuid())
   name      String
-  email     String?
-  phone     String?
+  email     String?  @unique
+  phone     String?  @unique
   address   String?
   city      String   @default("Linares")
   notes     String?
   orders    Order[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  @@unique([phone])
-  @@unique([email])
 }
 
 model Order {
   id         String   @id @default(cuid())
-  number     Int      @unique
+  number     Int      @unique @default(autoincrement())
   customerId String
-  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  status     String   @default("nuevo") // nuevo | confirmado | preparando | enviado | entregado | cancelado
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  status     String   @default("nuevo")
   total      Float    @default(0)
-  items      String   @default("[]") // JSON: [{id, name, price, qty}]
+  items      String   @default("[]")
   notes      String?
-  source     String   @default("web") // web | whatsapp | tienda
+  source     String   @default("web")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+model SiteEvent {
+  id        String   @id @default(cuid())
+  event     String
+  path      String
+  sessionId String?
+  referrer  String?
+  metadata  String?
+  createdAt DateTime @default(now())
+
+  @@index([event, createdAt])
+  @@index([sessionId, createdAt])
 }
