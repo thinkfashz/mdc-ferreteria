@@ -11,11 +11,9 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS });
 }
 
-interface OrderItem {
-  id: string;
-  name: string;
-  price: number;
-  qty: number;
+function isReadonlyDatabaseError(err: unknown) {
+  const message = err instanceof Error ? err.message : String(err ?? "");
+  return /readonly database|attempt to write a readonly database/i.test(message);
 }
 
 /**
@@ -41,7 +39,7 @@ export async function POST(req: Request) {
     }
 
     // Validar productos y stock contra la BD (nunca confiar en precios del cliente)
-    const ids = items.map((i: any) => String(i.id));
+    const ids = items.map((i: { id?: unknown }) => String(i.id));
     const products = await prisma.product.findMany({
       where: { id: { in: ids }, active: true },
     });
@@ -50,11 +48,14 @@ export async function POST(req: Request) {
     let total = 0;
 
     for (const it of items) {
-      const p = products.find(x => x.id === String(it.id));
+      const p = products.find((x) => x.id === String(it.id));
       if (!p) {
-        return NextResponse.json({ error: `Producto no disponible: ${it.name || it.id}` }, { status: 400, headers: CORS });
+        return NextResponse.json(
+          { error: `Producto no disponible: ${it.name || it.id}` },
+          { status: 400, headers: CORS }
+        );
       }
-      const qty = Math.max(1, parseInt(it.qty) || 1);
+      const qty = Math.max(1, parseInt(String(it.qty), 10) || 1);
       if (qty > p.stock) {
         return NextResponse.json(
           { error: `Stock insuficiente de "${p.name}" (disponible: ${p.stock})` },
@@ -65,7 +66,7 @@ export async function POST(req: Request) {
       total += p.price * qty;
     }
 
-    // CRM: crear o reutilizar cliente
+    // CRM: crear o reutilizar cliente.
     const cleanPhone = String(phone).trim();
     const cleanEmail = email ? String(email).trim().toLowerCase() : null;
 
@@ -86,7 +87,6 @@ export async function POST(req: Request) {
         },
       });
     } else {
-      // mantener datos de contacto al día
       await prisma.customer.update({
         where: { id: customer.id },
         data: {
@@ -98,7 +98,7 @@ export async function POST(req: Request) {
       });
     }
 
-    // Número de orden secuencial
+    // Número de orden secuencial.
     const lastOrder = await prisma.order.findFirst({ orderBy: { number: "desc" } });
     const number = (lastOrder?.number || 0) + 1;
 
@@ -123,7 +123,25 @@ export async function POST(req: Request) {
       },
       { headers: CORS }
     );
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message?.slice(0, 300) || "Error" }, { status: 500, headers: CORS });
+  } catch (err: unknown) {
+    console.error("Public checkout error:", err);
+
+    if (isReadonlyDatabaseError(err)) {
+      return NextResponse.json(
+        {
+          error: "El registro automático de pedidos está temporalmente fuera de servicio.",
+          code: "PERSISTENCE_UNAVAILABLE",
+        },
+        { status: 503, headers: CORS }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        error: "No pudimos registrar el pedido. Intenta nuevamente o confírmalo por WhatsApp.",
+        code: "CHECKOUT_ERROR",
+      },
+      { status: 500, headers: CORS }
+    );
   }
 }
