@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-/**
- * API pública para la tienda.
- * La base de datos es la fuente de verdad. Si no está disponible, la tienda
- * activa su snapshot/cache local en vez de quedar vacía.
- */
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
@@ -28,9 +23,7 @@ function databaseUnavailableResponse() {
 }
 
 export async function GET(req: Request) {
-  if (!process.env.DATABASE_URL) {
-    return databaseUnavailableResponse();
-  }
+  if (!process.env.DATABASE_URL) return databaseUnavailableResponse();
 
   try {
     const { searchParams } = new URL(req.url);
@@ -41,20 +34,18 @@ export async function GET(req: Request) {
     const id = (searchParams.get("id") || "").trim();
 
     const where: Record<string, unknown> = { active: true };
-
-    if (id) where.id = id;
+    if (id) where.OR = [{ id }, { slug: id }, { sku: id }];
 
     if (search) {
       where.OR = [
-        { name: { contains: search } },
-        { sku: { contains: search } },
-        { barcode: { contains: search } },
+        { name: { contains: search, mode: "insensitive" } },
+        { brand: { contains: search, mode: "insensitive" } },
+        { sku: { contains: search, mode: "insensitive" } },
+        { barcode: { contains: search, mode: "insensitive" } },
       ];
     }
 
-    if (cat) {
-      where.category = { slug: cat };
-    }
+    if (cat) where.category = { slug: cat };
 
     const [data, total] = await Promise.all([
       prisma.product.findMany({
@@ -74,7 +65,9 @@ export async function GET(req: Request) {
           name: p.name,
           slug: p.slug,
           description: p.description || "",
+          brand: p.brand || "",
           price: p.price,
+          compareAtPrice: p.compareAtPrice,
           stock: p.stock,
           minStock: p.minStock,
           unit: p.unit,
@@ -97,15 +90,12 @@ export async function GET(req: Request) {
     console.error("Public catalog error:", err);
     const message = err instanceof Error ? err.message : String(err ?? "");
 
-    if (/database|sqlite|connector|environment variable|datasource/i.test(message)) {
+    if (/database|postgres|connector|environment variable|datasource/i.test(message)) {
       return databaseUnavailableResponse();
     }
 
     return NextResponse.json(
-      {
-        error: "No pudimos consultar el inventario en este momento.",
-        code: "CATALOG_ERROR",
-      },
+      { error: "No pudimos consultar el inventario en este momento.", code: "CATALOG_ERROR" },
       { status: 500, headers: CORS }
     );
   }
