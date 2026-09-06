@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/require-admin";
 
 interface BarcodeResult {
   found: boolean;
@@ -24,7 +25,6 @@ async function fetchWithTimeout(url: string, timeout = 5000): Promise<Response |
   } catch { return null; }
 }
 
-/* UPC Item DB (trial: ~5 req/min) — buena cobertura de productos generales */
 async function searchUPCItemDB(code: string): Promise<BarcodeResult | null> {
   const res = await fetchWithTimeout(`https://api.upcitemdb.com/prod/trial/lookup?upc=${code}`);
   if (!res?.ok) return null;
@@ -41,7 +41,6 @@ async function searchUPCItemDB(code: string): Promise<BarcodeResult | null> {
   };
 }
 
-/* Open Products Facts (hermana de OFF, catálogo no-alimentario más amplio) */
 async function searchOpenProductsFacts(code: string): Promise<BarcodeResult | null> {
   const res = await fetchWithTimeout(`https://world.openproductsfacts.org/api/v2/product/${code}.json`);
   if (!res?.ok) return null;
@@ -58,7 +57,6 @@ async function searchOpenProductsFacts(code: string): Promise<BarcodeResult | nu
   };
 }
 
-/* Open Food Facts */
 async function searchOpenFoodFacts(code: string): Promise<BarcodeResult | null> {
   const res = await fetchWithTimeout(`https://world.openfoodfacts.org/api/v2/product/${code}.json`);
   if (!res?.ok) return null;
@@ -75,7 +73,6 @@ async function searchOpenFoodFacts(code: string): Promise<BarcodeResult | null> 
   };
 }
 
-/* Open Beauty Facts */
 async function searchOpenBeautyFacts(code: string): Promise<BarcodeResult | null> {
   const res = await fetchWithTimeout(`https://world.openbeautyfacts.org/api/v2/product/${code}.json`);
   if (!res?.ok) return null;
@@ -92,7 +89,6 @@ async function searchOpenBeautyFacts(code: string): Promise<BarcodeResult | null
   };
 }
 
-/* Open Pet Food Facts */
 async function searchOpenPetFoodFacts(code: string): Promise<BarcodeResult | null> {
   const res = await fetchWithTimeout(`https://world.openpetfoodfacts.org/api/v2/product/${code}.json`);
   if (!res?.ok) return null;
@@ -109,7 +105,6 @@ async function searchOpenPetFoodFacts(code: string): Promise<BarcodeResult | nul
   };
 }
 
-/* go-upc.com — gratis, sin key, buena cobertura de ferretería/herramientas */
 async function searchGoUPC(code: string): Promise<BarcodeResult | null> {
   const res = await fetchWithTimeout(`https://go-upc.com/api/v1/code/${code}`);
   if (!res?.ok) return null;
@@ -127,6 +122,9 @@ async function searchGoUPC(code: string): Promise<BarcodeResult | null> {
 }
 
 export async function GET(req: Request) {
+  const denied = await requireAdmin();
+  if (denied) return denied;
+
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code");
 
