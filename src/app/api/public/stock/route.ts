@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { proxyPublicEdge } from "@/lib/mdc-public-edge";
 
 /**
  * Stock en vivo para la tienda. GET /api/public/stock?ids=a,b,c
@@ -17,18 +18,8 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS });
 }
 
-function unavailable() {
-  return NextResponse.json(
-    {
-      error: "El stock en vivo está temporalmente fuera de servicio.",
-      code: "DATABASE_UNAVAILABLE",
-    },
-    { status: 503, headers: CORS }
-  );
-}
-
 export async function GET(req: Request) {
-  if (!process.env.DATABASE_URL) return unavailable();
+  if (!process.env.DATABASE_URL) return proxyPublicEdge("stock", req);
 
   try {
     const { searchParams } = new URL(req.url);
@@ -81,8 +72,8 @@ export async function GET(req: Request) {
   } catch (err: unknown) {
     console.error("Public stock error:", err);
     const message = err instanceof Error ? err.message : String(err ?? "");
-    if (/database|sqlite|connector|environment variable|datasource/i.test(message)) {
-      return unavailable();
+    if (/database|postgres|connector|environment variable|datasource|connection/i.test(message)) {
+      return proxyPublicEdge("stock", req);
     }
 
     return NextResponse.json(
