@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { proxyPublicEdge } from "@/lib/mdc-public-edge";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -13,12 +14,16 @@ export async function OPTIONS() {
 }
 
 export async function POST(req: Request) {
+  const body = await req.json().catch(() => ({}));
+
   if (!process.env.DATABASE_URL) {
-    return NextResponse.json({ ok: false, code: "ANALYTICS_UNAVAILABLE" }, { status: 503, headers: CORS });
+    return proxyPublicEdge("analytics", req, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
   }
 
   try {
-    const body = await req.json().catch(() => ({}));
     const event = String(body?.event || "pageview").trim().slice(0, 60);
     const path = String(body?.path || "/").trim().slice(0, 300);
     const sessionId = body?.sessionId ? String(body.sessionId).trim().slice(0, 80) : null;
@@ -38,6 +43,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true }, { headers: CORS });
   } catch (error) {
     console.error("Analytics event error:", error);
+    const message = error instanceof Error ? error.message : String(error ?? "");
+    if (/database|postgres|connector|environment variable|datasource|connection/i.test(message)) {
+      return proxyPublicEdge("analytics", req, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+    }
     return NextResponse.json({ ok: false }, { status: 500, headers: CORS });
   }
 }
