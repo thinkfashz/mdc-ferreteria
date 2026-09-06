@@ -3,27 +3,51 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET() {
   try {
-    const [totalProducts, totalCategories, lowStockProducts, inventoryAgg] =
-      await Promise.all([
-        prisma.product.count({ where: { active: true } }),
-        prisma.category.count(),
-        prisma.product.count({
-          where: { active: true, stock: { lte: prisma.product.fields?.minStock ?? 0 } },
-        }).catch(() =>
-          prisma.$queryRaw`SELECT COUNT(*) as count FROM Product WHERE active = 1 AND stock <= minStock`
-            .then((r: unknown) => {
-              const rows = r as { count: bigint }[];
-              return Number(rows[0]?.count ?? 0);
-            })
-        ),
-        prisma.product.aggregate({ _sum: { stock: true }, where: { active: true } }),
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const [totalProducts, totalCategories, inventoryRows, inventoryAgg, newOrders] = await Promise.all([
+      prisma.product.count({ where: { active: true } }),
+      prisma.category.count(),
+      prisma.product.findMany({
+        where: { active: true },
+        select: { stock: true, minStock: true },
+      }),
+      prisma.product.aggregate({ _sum: { stock: true }, where: { active: true } }),
+      prisma.order.count({ where: { status: "nuevo" } }),
+    ]);
+
+    let pageviews7d = 0;
+    let visitors7d = 0;
+
+    try {
+      const [pageviews, visitors] = await Promise.all([
+        prisma.siteEvent.count({
+          where: { event: "pageview", createdAt: { gte: sevenDaysAgo } },
+        }),
+        prisma.siteEvent.findMany({
+          where: {
+            event: "pageview",
+            createdAt: { gte: sevenDaysAgo },
+            sessionId: { not: null },
+          },
+          select: { sessionId: true },
+          distinct: ["sessionId"],
+        }),
       ]);
+      pageviews7d = pageviews;
+      visitors7d = visitors.length;
+    } catch (error) {
+      console.warn("Site analytics unavailable:", error);
+    }
 
     const stats = {
       totalProducts,
       totalCategories,
-      lowStockProducts: typeof lowStockProducts === "number" ? lowStockProducts : 0,
+      lowStockProducts: inventoryRows.filter((p) => p.stock <= p.minStock).length,
       totalInventory: inventoryAgg._sum.stock || 0,
+      pageviews7d,
+      visitors7d,
+      newOrders,
     };
 
     const lowStock = await prisma.product.findMany({
@@ -35,8 +59,17 @@ export async function GET() {
     return NextResponse.json({ stats, lowStock });
   } catch (error) {
     console.error("Dashboard error:", error);
-    return NextResponse.json(
-      { stats: { totalProducts: 0, totalCategories: 0, lowStockProducts: 0, totalInventory: 0 }, lowStock: [] }
-    );
+    return NextResponse.json({
+      stats: {
+        totalProducts: 0,
+        totalCategories: 0,
+        lowStockProducts: 0,
+        totalInventory: 0,
+        pageviews7d: 0,
+        visitors7d: 0,
+        newOrders: 0,
+      },
+      lowStock: [],
+    });
   }
 }
