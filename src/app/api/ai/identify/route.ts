@@ -118,6 +118,12 @@ price = estimado en pesos chilenos (entero). Sé conciso: name máximo 6 palabra
     if (/timeout|abort/i.test(msg)) {
       return NextResponse.json({ error: "Ollama tardó demasiado. ¿Está corriendo? (ollama serve)" }, { status: 504 });
     }
+    if (/fetch failed|ENOTFOUND|ECONNREFUSED/i.test(msg)) {
+      return NextResponse.json(
+        { error: "No hay conexión con Ollama. La identificación por foto funciona solo con la app corriendo en tu PC (ollama serve). El lector de códigos/QR sí funciona en la nube." },
+        { status: 502 }
+      );
+    }
     return NextResponse.json({ error: msg.slice(0, 300) }, { status: 500 });
   }
 }
