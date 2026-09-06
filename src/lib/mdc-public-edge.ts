@@ -1,14 +1,16 @@
 const EDGE_BASE = "https://rrtgulgmyrghvpdmwvse.supabase.co/functions/v1/mdc-public";
 
+type PublicEdgeAction = "catalog" | "stock" | "checkout" | "analytics";
+
 export async function proxyPublicEdge(
-  action: "catalog" | "checkout" | "analytics",
+  action: PublicEdgeAction,
   req: Request,
   init?: RequestInit,
 ) {
   const incoming = new URL(req.url);
   const target = new URL(`${EDGE_BASE}/${action}`);
 
-  if (action === "catalog") {
+  if (action === "catalog" || action === "stock") {
     incoming.searchParams.forEach((value, key) => target.searchParams.set(key, value));
   }
 
@@ -24,6 +26,8 @@ export async function proxyPublicEdge(
   });
 
   const text = await response.text();
+  const isRead = action === "catalog" || action === "stock";
+
   return new Response(text, {
     status: response.status,
     statusText: response.statusText,
@@ -31,7 +35,7 @@ export async function proxyPublicEdge(
       "Content-Type": response.headers.get("content-type") || "application/json",
       "Cache-Control": "no-store, max-age=0",
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": action === "catalog" ? "GET, OPTIONS" : "POST, OPTIONS",
+      "Access-Control-Allow-Methods": isRead ? "GET, OPTIONS" : "POST, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
     },
   });
