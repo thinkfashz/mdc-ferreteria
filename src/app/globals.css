@@ -1,0 +1,159 @@
+@import "tailwindcss";
+
+:root {
+  --mdc-orange: #F97316;
+  --mdc-orange-dark: #EA580C;
+  --mdc-black: #0d0d0d;
+  --mdc-gray: #1A1A1A;
+}
+
+@theme inline {
+  --color-mdc-orange: var(--mdc-orange);
+  --color-mdc-orange-dark: var(--mdc-orange-dark);
+  --color-mdc-black: var(--mdc-black);
+  --color-mdc-gray: var(--mdc-gray);
+}
+
+/* ===== Tokens semánticos de tema (estilo landing) ===== */
+/* Oscuro (default) */
+:root {
+  --bg-page: #0d0d0d;
+  --bg-section: #131313;
+  --bg-card: #161616;
+  --bg-card-2: #181818;
+  --bg-input: #101010;
+  --text-main: #f5f3ef;
+  --text-soft: #d8d4cd;   /* cálido como la landing */
+  --text-muted: #a3a09a;
+  --text-dim: #75716a;
+  --accent: #F97316;
+  --accent-soft: rgba(249, 115, 22, 0.14);
+  --border-soft: rgba(255, 255, 255, 0.08);
+  --border-card: rgba(255, 255, 255, 0.06);
+  --nav-bg: rgba(13, 13, 13, 0.85);
+  --input-bg: #101010;
+  --hover-soft: rgba(255, 255, 255, 0.05);
+  --success: #4ade80;
+  --danger: #ef4444;
+}
+
+/* Claro */
+html.tema-claro {
+  --bg-page: #f6f5f2;
+  --bg-section: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-2: #f1efec;
+  --bg-input: #ffffff;
+  --text-main: #171513;
+  --text-soft: #3f3b37;
+  --text-muted: #6b6560;
+  --text-dim: #8f8880;
+  --accent: #EA580C;
+  --accent-soft: rgba(234, 88, 12, 0.12);
+  --border-soft: rgba(0, 0, 0, 0.12);
+  --border-card: rgba(0, 0, 0, 0.07);
+  --nav-bg: rgba(255, 255, 255, 0.92);
+  --hover-soft: rgba(0, 0, 0, 0.04);
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ===== Utilidades de tema ===== */
+.bg-page { background-color: var(--bg-page); }
+.bg-section { background-color: var(--bg-section); }
+.bg-card { background-color: var(--bg-card); }
+.bg-card2 { background-color: var(--bg-card-2); }
+.bg-input-theme { background-color: var(--bg-input); }
+.text-main { color: var(--text-main); }
+.text-soft { color: var(--text-soft); }
+.text-muted { color: var(--text-muted); }
+.text-dim { color: var(--text-dim); }
+.text-accent { color: var(--accent); }
+.bg-accent-theme { background-color: var(--accent); }
+.bg-accent-soft { background-color: var(--accent-soft); }
+.border-soft { border-color: var(--border-soft); }
+.border-card { border-color: var(--border-card); }
+.nav-blur { background-color: var(--nav-bg); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.input-theme { background-color: var(--input-bg); }
+.hover-soft:hover { background-color: var(--hover-soft); }
+
+/* Anillo de foco naranja consistente */
+.focus-mdc:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+/* ===== Splash screen keyframes ===== */
+@keyframes splash-in {
+  0% { opacity: 0; transform: scale(0.85); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes splash-up {
+  0% { opacity: 0; transform: translateY(14px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes splash-bar {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
+/* respeto preferencias de accesibilidad */
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[splash-in_0\.7s_ease-out\],
+  .animate-\[splash-up_0\.9s_ease-out\],
+  .animate-\[splash-bar_2s_ease-in-out_forwards\] {
+    animation: none !important;
+  }
+}
+
+/* Logo del footer: sobre fondo claro usa variante light */
+html.tema-claro .footer-logo { content: url("/logo-mdc-light.png"); }
+
+/* Texto sobre imágenes (hero, despacho, login): siempre blanco por el overlay oscuro */
+.hero-texto,
+.despacho-texto,
+.login-branding {
+  color: #ffffff;
+}
+html.tema-claro .hero-texto .text-soft,
+html.tema-claro .hero-texto p,
+html.tema-claro .despacho-texto p {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-section);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(249, 115, 22, 0.5);
+}
+
+html.tema-claro ::-webkit-scrollbar-track { background: #eceae6; }
+html.tema-claro ::-webkit-scrollbar-thumb { background: #c9c4bd; }
+html.tema-claro ::-webkit-scrollbar-thumb:hover { background: #aba59d; }
+
+/* ===== App nativa: espacio para TabBar en móvil ===== */
+@media (max-width: 1023px) {
+  body { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+}

@@ -1,0 +1,38 @@
+{
+  "name": "MDC Ferretería - Linares",
+  "short_name": "MDC",
+  "description": "Ferretería e herrería industrial en Linares. Herramientas, materiales de construcción, electricidad y gasfitería. La rapidez que el maestro necesita.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d0d0d",
+  "theme_color": "#FF6600",
+  "orientation": "portrait-primary",
+  "lang": "es",
+  "categories": ["shopping", "business"],
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Herramientas",
+      "url": "/categoria/herramientas",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Construcción",
+      "url": "/categoria/construccion",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
