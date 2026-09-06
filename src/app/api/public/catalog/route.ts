@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { proxyPublicEdge } from "@/lib/mdc-public-edge";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -12,18 +13,10 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS });
 }
 
-function databaseUnavailableResponse() {
-  return NextResponse.json(
-    {
-      error: "El inventario en vivo está temporalmente fuera de servicio.",
-      code: "DATABASE_UNAVAILABLE",
-    },
-    { status: 503, headers: CORS }
-  );
-}
-
 export async function GET(req: Request) {
-  if (!process.env.DATABASE_URL) return databaseUnavailableResponse();
+  if (!process.env.DATABASE_URL) {
+    return proxyPublicEdge("catalog", req);
+  }
 
   try {
     const { searchParams } = new URL(req.url);
@@ -90,8 +83,8 @@ export async function GET(req: Request) {
     console.error("Public catalog error:", err);
     const message = err instanceof Error ? err.message : String(err ?? "");
 
-    if (/database|postgres|connector|environment variable|datasource/i.test(message)) {
-      return databaseUnavailableResponse();
+    if (/database|postgres|connector|environment variable|datasource|connection/i.test(message)) {
+      return proxyPublicEdge("catalog", req);
     }
 
     return NextResponse.json(
