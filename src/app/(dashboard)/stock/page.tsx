@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Package, Check, Search, ArrowDown, ArrowUp, History, Scan, X,
   Loader2, Save, Trash2, Plus, ShoppingCart, ImagePlus, AlertCircle,
-  Database, Globe2, RefreshCw,
+  Database, Globe2,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
@@ -34,6 +34,7 @@ interface QueuedItem {
   code: string;
   labelCode: string;
   format: string;
+  productId: string;
   lookup: BarcodeLookup | null;
   loading: boolean;
   saving: boolean;
@@ -167,6 +168,7 @@ export default function StockPage() {
       code,
       labelCode: code,
       format,
+      productId: local?.id || "",
       lookup: null,
       loading: true,
       saving: false,
@@ -194,6 +196,7 @@ export default function StockPage() {
         ...current,
         lookup,
         loading: false,
+        productId: current.productId || lookup.productId || "",
         name: current.name || lookup.name || `Producto ${code}`,
         brand: current.brand || lookup.brand || "",
         description: current.description || lookup.description || "",
@@ -217,6 +220,7 @@ export default function StockPage() {
       code: "",
       labelCode,
       format: "foto-ia",
+      productId: "",
       lookup: {
         ...emptyLookup(""),
         found: true,
@@ -254,6 +258,26 @@ export default function StockPage() {
 
   const updateQueueItem = (id: string, updates: Partial<QueuedItem>) => {
     updateQueue((items) => items.map((item) => item.id === id ? { ...item, ...updates } : item));
+  };
+
+  const selectExistingProduct = (itemId: string, productId: string) => {
+    if (!productId) {
+      updateQueueItem(itemId, { productId: "" });
+      return;
+    }
+    const product = products.find((entry) => entry.id === productId);
+    if (!product) return;
+    updateQueueItem(itemId, {
+      productId: product.id,
+      name: product.name,
+      brand: product.brand || "",
+      description: product.description || "",
+      imageUrl: product.imageUrl || "",
+      price: String(product.price ?? 0),
+      categoryId: product.categoryId || "",
+      unit: product.unit || "pieza",
+      error: "",
+    });
   };
 
   const removeQueueItem = (id: string) => {
@@ -307,6 +331,7 @@ export default function StockPage() {
       const hostedImage = await ensureHostedImage(latest);
       const payload: Record<string, unknown> = {
         code: latest.code,
+        productId: latest.productId,
         name: latest.name.trim(),
         brand: latest.brand.trim(),
         description: latest.description.trim(),
@@ -329,6 +354,7 @@ export default function StockPage() {
 
       updateQueueItem(latest.id, {
         imageUrl: hostedImage,
+        productId: String(data?.product?.id || latest.productId || ""),
         saving: false,
         saved: true,
         error: "",
@@ -419,7 +445,6 @@ export default function StockPage() {
               <p className="text-xs text-muted mt-1">{pendingCount} pendiente{pendingCount === 1 ? "" : "s"} · {savedCount} guardado{savedCount === 1 ? "" : "s"}</p>
             </div>
             <div className="flex gap-2 flex-wrap">
-              <Button variant="ghost" size="sm" onClick={() => void Promise.all(queue.filter((item) => !item.saved && item.code).map((item) => addToQueue(item.code, item.format)))}><RefreshCw className="w-4 h-4 mr-1" /> Revisar</Button>
               {savedCount > 0 && <Button variant="ghost" size="sm" onClick={clearSaved}>Limpiar guardados</Button>}
               {pendingCount > 0 && <Button size="sm" onClick={() => void saveAll()} loading={savingAll}><Save className="w-4 h-4 mr-1" /> Guardar todo ({pendingCount})</Button>}
             </div>
@@ -428,6 +453,7 @@ export default function StockPage() {
           <div className="space-y-4">
             {queue.map((item) => {
               const preview = resolveProductImageUrl(item.imageUrl);
+              const linkedProduct = item.productId ? products.find((product) => product.id === item.productId) : null;
               return (
                 <div key={item.id} className={`rounded-2xl border p-4 sm:p-5 transition-all ${item.saved ? "bg-green-500/[0.04] border-green-500/25" : "bg-card2 border-card hover:border-[rgba(249,115,22,0.35)]"}`}>
                   <div className="flex flex-col sm:flex-row sm:items-start gap-4">
@@ -459,6 +485,16 @@ export default function StockPage() {
                         )}
                         {item.saved && <span className="ml-auto text-xs bg-green-500/10 text-green-400 border border-green-500/25 px-2 py-1 rounded-full flex items-center gap-1"><Check className="w-3 h-3" /> Guardado · stock {item.savedStock ?? 0}</span>}
                       </div>
+
+                      {!item.saved && (
+                        <label className="block text-xs text-muted">Vincular a un producto que ya existe en el catálogo
+                          <select value={item.productId} onChange={(e) => selectExistingProduct(item.id, e.target.value)} className="mt-1 input-theme w-full px-3 py-2.5 border border-soft rounded-xl text-sm text-main focus-mdc">
+                            <option value="">Crear producto nuevo con este código</option>
+                            {products.map((product) => <option key={product.id} value={product.id}>{product.name} · stock {product.stock}</option>)}
+                          </select>
+                          {linkedProduct && <span className="mt-1 block text-[11px] text-green-400">El código {item.code || "sin código"} se asociará a “{linkedProduct.name}” y el movimiento modificará su stock real.</span>}
+                        </label>
+                      )}
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <label className="md:col-span-2 text-xs text-muted">Nombre *
