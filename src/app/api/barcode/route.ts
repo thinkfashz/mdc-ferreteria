@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/require-admin";
+import { adminFunctionRpc, adminGatewayResponse } from "@/lib/supabase-admin";
 
 interface BarcodeResult {
   found: boolean;
@@ -10,146 +10,195 @@ interface BarcodeResult {
   description: string;
   imageUrl: string;
   category: string;
+  local: boolean;
+  productId?: string | null;
+  stock?: number | null;
+  price?: number | null;
+}
+
+interface LocalProduct {
+  id: string;
+  name: string;
+  brand?: string | null;
+  description?: string | null;
+  imageUrl?: string | null;
+  barcode?: string | null;
+  sku?: string | null;
+  stock?: number | null;
+  price?: number | null;
+  category?: { name?: string | null } | null;
 }
 
 const EMPTY: Omit<BarcodeResult, "code"> = {
-  found: false, source: "none", name: "", brand: "", description: "", imageUrl: "", category: "",
+  found: false,
+  source: "none",
+  name: "",
+  brand: "",
+  description: "",
+  imageUrl: "",
+  category: "",
+  local: false,
+  productId: null,
+  stock: null,
+  price: null,
 };
 
-async function fetchWithTimeout(url: string, timeout = 5000): Promise<Response | null> {
+async function fetchWithTimeout(url: string, timeout = 3000): Promise<Response | null> {
   try {
     return await fetch(url, {
       signal: AbortSignal.timeout(timeout),
-      headers: { "User-Agent": "MDC-Ferreteria/1.0 (inventory lookup)" },
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "MDC-Ferreteria/2.0 (barcode inventory lookup)",
+      },
+      next: { revalidate: 86400 },
     });
-  } catch { return null; }
+  } catch {
+    return null;
+  }
+}
+
+function remoteResult(
+  code: string,
+  source: string,
+  values: Partial<BarcodeResult>,
+): BarcodeResult | null {
+  const name = String(values.name || "").trim();
+  const brand = String(values.brand || "").trim();
+  const description = String(values.description || "").trim();
+  const imageUrl = String(values.imageUrl || "").trim();
+  const category = String(values.category || "").trim();
+
+  if (!name && !brand && !description && !imageUrl) return null;
+  return {
+    found: true,
+    source,
+    code,
+    name,
+    brand,
+    description: description || name,
+    imageUrl,
+    category,
+    local: false,
+    productId: null,
+    stock: null,
+    price: null,
+  };
 }
 
 async function searchUPCItemDB(code: string): Promise<BarcodeResult | null> {
-  const res = await fetchWithTimeout(`https://api.upcitemdb.com/prod/trial/lookup?upc=${code}`);
+  const res = await fetchWithTimeout(`https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(code)}`);
   if (!res?.ok) return null;
-  const data = await res.json();
-  if (!data.items?.length) return null;
-  const item = data.items[0];
-  return {
-    found: true, source: "UPC Item DB", code,
-    name: item.title || "",
-    brand: item.brand || "",
-    description: item.description || item.title || "",
-    imageUrl: item.images?.[0] || "",
-    category: item.category || "",
-  };
+  const data = await res.json().catch(() => null);
+  const item = data?.items?.[0];
+  if (!item) return null;
+  return remoteResult(code, "UPC Item DB", {
+    name: item.title,
+    brand: item.brand,
+    description: item.description || item.title,
+    imageUrl: item.images?.[0],
+    category: item.category,
+  });
 }
 
-async function searchOpenProductsFacts(code: string): Promise<BarcodeResult | null> {
-  const res = await fetchWithTimeout(`https://world.openproductsfacts.org/api/v2/product/${code}.json`);
+async function searchOpenFacts(
+  code: string,
+  host: string,
+  source: string,
+): Promise<BarcodeResult | null> {
+  const res = await fetchWithTimeout(`https://${host}/api/v2/product/${encodeURIComponent(code)}.json`);
   if (!res?.ok) return null;
-  const data = await res.json();
-  if (data.status !== 1 || !data.product) return null;
+  const data = await res.json().catch(() => null);
+  if (data?.status !== 1 || !data?.product) return null;
   const p = data.product;
-  return {
-    found: true, source: "Open Products Facts", code,
-    name: p.product_name || p.generic_name || "",
-    brand: p.brands || "",
-    description: p.generic_name || p.product_name || "",
-    imageUrl: p.image_url || "",
-    category: p.categories || "",
-  };
+  return remoteResult(code, source, {
+    name: p.product_name || p.generic_name,
+    brand: p.brands,
+    description: p.generic_name || p.product_name,
+    imageUrl: p.image_front_url || p.image_url,
+    category: p.categories,
+  });
 }
 
-async function searchOpenFoodFacts(code: string): Promise<BarcodeResult | null> {
-  const res = await fetchWithTimeout(`https://world.openfoodfacts.org/api/v2/product/${code}.json`);
-  if (!res?.ok) return null;
-  const data = await res.json();
-  if (data.status !== 1 || !data.product) return null;
-  const p = data.product;
-  return {
-    found: true, source: "Open Food Facts", code,
-    name: p.product_name || "",
-    brand: p.brands || "",
-    description: p.generic_name || p.product_name || "",
-    imageUrl: p.image_url || "",
-    category: p.categories || "",
-  };
-}
-
-async function searchOpenBeautyFacts(code: string): Promise<BarcodeResult | null> {
-  const res = await fetchWithTimeout(`https://world.openbeautyfacts.org/api/v2/product/${code}.json`);
-  if (!res?.ok) return null;
-  const data = await res.json();
-  if (data.status !== 1 || !data.product) return null;
-  const p = data.product;
-  return {
-    found: true, source: "Open Beauty Facts", code,
-    name: p.product_name || "",
-    brand: p.brands || "",
-    description: p.generic_name || p.product_name || "",
-    imageUrl: p.image_url || "",
-    category: p.categories || "",
-  };
-}
-
-async function searchOpenPetFoodFacts(code: string): Promise<BarcodeResult | null> {
-  const res = await fetchWithTimeout(`https://world.openpetfoodfacts.org/api/v2/product/${code}.json`);
-  if (!res?.ok) return null;
-  const data = await res.json();
-  if (data.status !== 1 || !data.product) return null;
-  const p = data.product;
-  return {
-    found: true, source: "Open Pet Food Facts", code,
-    name: p.product_name || "",
-    brand: p.brands || "",
-    description: p.generic_name || p.product_name || "",
-    imageUrl: p.image_url || "",
-    category: p.categories || "",
-  };
-}
-
-async function searchGoUPC(code: string): Promise<BarcodeResult | null> {
-  const res = await fetchWithTimeout(`https://go-upc.com/api/v1/code/${code}`);
-  if (!res?.ok) return null;
-  const data = await res.json();
-  if (!data?.product) return null;
-  const p = data.product;
-  return {
-    found: true, source: "Go-UPC", code,
-    name: p.name || "",
-    brand: p.brand || "",
-    description: p.description || p.name || "",
-    imageUrl: p.imageUrl || "",
-    category: p.category || "",
-  };
+function resultScore(result: BarcodeResult) {
+  let score = 0;
+  if (result.name) score += 5;
+  if (result.brand) score += 2;
+  if (result.description && result.description !== result.name) score += 2;
+  if (result.imageUrl) score += 4;
+  if (result.category) score += 1;
+  if (result.source === "UPC Item DB") score += 1;
+  return score;
 }
 
 export async function GET(req: Request) {
-  const denied = await requireAdmin();
-  if (denied) return denied;
-
   const { searchParams } = new URL(req.url);
-  const code = searchParams.get("code");
+  const code = String(searchParams.get("code") || "").trim();
 
   if (!code) {
-    return NextResponse.json({ error: "Code required" }, { status: 400 });
+    return NextResponse.json({ error: "Código requerido" }, { status: 400 });
+  }
+  if (!/^[0-9A-Za-z\-_.]{4,64}$/.test(code)) {
+    return NextResponse.json({ ...EMPTY, code });
   }
 
-  const cleanCode = code.trim();
-  if (!/^[0-9A-Za-z\-_\.]{4,64}$/.test(cleanCode)) {
-    return NextResponse.json({ ...EMPTY, code: cleanCode });
+  try {
+    /* Primero MDC: respuesta inmediata y sin consumir cuotas externas. */
+    const local = await adminFunctionRpc<LocalProduct | null>("mdc_admin_product_lookup", {
+      p_code: code,
+    });
+
+    if (local?.id) {
+      return NextResponse.json({
+        found: true,
+        source: "MDC Inventario",
+        code,
+        name: local.name || "",
+        brand: local.brand || "",
+        description: local.description || "",
+        imageUrl: local.imageUrl || "",
+        category: local.category?.name || "",
+        local: true,
+        productId: local.id,
+        stock: Number(local.stock ?? 0),
+        price: Number(local.price ?? 0),
+      } satisfies BarcodeResult, {
+        headers: { "Cache-Control": "private, no-store" },
+      });
+    }
+
+    /*
+     * Las bases públicas se consultan en paralelo. Antes se esperaba una por una,
+     * pudiendo sumar varios timeouts. Ahora el tiempo total queda acotado al
+     * proveedor más lento (~3 s) y elegimos el resultado con más información.
+     */
+    const searches = [
+      searchUPCItemDB(code),
+      searchOpenFacts(code, "world.openproductsfacts.org", "Open Products Facts"),
+      searchOpenFacts(code, "world.openfoodfacts.org", "Open Food Facts"),
+      searchOpenFacts(code, "world.openbeautyfacts.org", "Open Beauty Facts"),
+      searchOpenFacts(code, "world.openpetfoodfacts.org", "Open Pet Food Facts"),
+    ];
+
+    const settled = await Promise.allSettled(searches);
+    const candidates = settled
+      .filter((entry): entry is PromiseFulfilledResult<BarcodeResult | null> => entry.status === "fulfilled")
+      .map((entry) => entry.value)
+      .filter((entry): entry is BarcodeResult => Boolean(entry?.found))
+      .sort((a, b) => resultScore(b) - resultScore(a));
+
+    const best = candidates[0];
+    if (best) {
+      return NextResponse.json(best, {
+        headers: { "Cache-Control": "private, max-age=300" },
+      });
+    }
+
+    return NextResponse.json({ ...EMPTY, code }, {
+      headers: { "Cache-Control": "private, max-age=60" },
+    });
+  } catch (error) {
+    const response = adminGatewayResponse(error);
+    return NextResponse.json(response.body, { status: response.status });
   }
-
-  const apis = [
-    searchUPCItemDB,
-    searchGoUPC,
-    searchOpenProductsFacts,
-    searchOpenFoodFacts,
-    searchOpenBeautyFacts,
-    searchOpenPetFoodFacts,
-  ];
-
-  for (const apiFn of apis) {
-    const result = await apiFn(cleanCode);
-    if (result?.found) return NextResponse.json(result);
-  }
-
-  return NextResponse.json({ ...EMPTY, code: cleanCode });
 }
