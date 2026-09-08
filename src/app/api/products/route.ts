@@ -1,119 +1,58 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/utils";
-import { requireAdmin } from "@/lib/require-admin";
+import { adminGatewayResponse, adminRpc } from "@/lib/supabase-admin";
 
 export async function GET(req: Request) {
-  const denied = await requireAdmin();
-  if (denied) return denied;
-
-  const { searchParams } = new URL(req.url);
-  const page = parseInt(searchParams.get("page") || "1");
-  const pageSize = parseInt(searchParams.get("pageSize") || "12");
-  const search = searchParams.get("search") || "";
-  const category = searchParams.get("category") || "";
-  const featured = searchParams.get("featured") || "";
-
-  const where: Record<string, unknown> = {};
-
-  if (search) {
-    where.OR = [
-      { name: { contains: search, mode: "insensitive" } },
-      { brand: { contains: search, mode: "insensitive" } },
-      { sku: { contains: search, mode: "insensitive" } },
-      { barcode: { contains: search, mode: "insensitive" } },
-    ];
-  }
-
-  if (category) where.categoryId = category;
-  if (featured === "true") where.featured = true;
-
   try {
-    const [data, total] = await Promise.all([
-      prisma.product.findMany({
-        where,
-        include: { category: true },
-        orderBy: { updatedAt: "desc" },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
-      prisma.product.count({ where }),
-    ]);
-
-    return NextResponse.json({
-      data,
-      total,
-      page,
-      pageSize,
-      totalPages: Math.ceil(total / pageSize),
+    const { searchParams } = new URL(req.url);
+    const result = await adminRpc<unknown>("products.list", {
+      page: Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1),
+      pageSize: Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "12", 10) || 12)),
+      search: searchParams.get("search") || "",
+      category: searchParams.get("category") || "",
+      featured: searchParams.get("featured") || "",
     });
+    return NextResponse.json(result);
   } catch (error) {
-    console.error("List products error:", error);
-    return NextResponse.json({ error: "No se pudo consultar el catálogo" }, { status: 503 });
+    const response = adminGatewayResponse(error);
+    return NextResponse.json(response.body, { status: response.status });
   }
 }
 
 export async function POST(req: Request) {
-  const denied = await requireAdmin();
-  if (denied) return denied;
-
   try {
     const body = await req.json();
-    const {
-      name,
-      description,
-      brand,
-      price,
-      compareAtPrice,
-      sku,
-      barcode,
-      imageUrl,
-      categoryId,
-      stock,
-      minStock,
-      unit,
-      featured,
-    } = body;
-
-    const cleanName = String(name || "").trim();
+    const cleanName = String(body?.name || "").trim();
     if (!cleanName) {
       return NextResponse.json({ error: "Nombre es requerido" }, { status: 400 });
     }
 
-    const slug = slugify(cleanName);
-    const existing = await prisma.product.findUnique({ where: { slug } });
-    if (existing) {
-      return NextResponse.json({ error: "Ya existe un producto con ese nombre" }, { status: 400 });
-    }
-
-    const parsedPrice = Math.max(0, Number(price) || 0);
-    const parsedCompareAt = compareAtPrice === "" || compareAtPrice == null
+    const price = Math.max(0, Number(body?.price) || 0);
+    const compareAtPrice = body?.compareAtPrice === "" || body?.compareAtPrice == null
       ? null
-      : Math.max(0, Number(compareAtPrice) || 0);
+      : Math.max(0, Number(body.compareAtPrice) || 0);
 
-    const product = await prisma.product.create({
-      data: {
-        name: cleanName,
-        slug,
-        description: description ? String(description).trim() : null,
-        brand: brand ? String(brand).trim() : null,
-        price: parsedPrice,
-        compareAtPrice: parsedCompareAt && parsedCompareAt > parsedPrice ? parsedCompareAt : null,
-        sku: sku ? String(sku).trim() : null,
-        barcode: barcode ? String(barcode).trim() : null,
-        imageUrl: imageUrl ? String(imageUrl).trim() : null,
-        categoryId: categoryId || null,
-        stock: Math.max(0, parseInt(String(stock ?? 0), 10) || 0),
-        minStock: Math.max(0, parseInt(String(minStock ?? 0), 10) || 0),
-        unit: unit || "pieza",
-        featured: Boolean(featured),
-      },
-      include: { category: true },
+    const result = await adminRpc<unknown>("products.create", {
+      name: cleanName,
+      slug: slugify(cleanName),
+      description: body?.description ? String(body.description).trim() : null,
+      brand: body?.brand ? String(body.brand).trim() : null,
+      price,
+      compareAtPrice: compareAtPrice && compareAtPrice > price ? compareAtPrice : null,
+      sku: body?.sku ? String(body.sku).trim() : null,
+      barcode: body?.barcode ? String(body.barcode).trim() : null,
+      imageUrl: body?.imageUrl ? String(body.imageUrl).trim() : null,
+      categoryId: body?.categoryId || null,
+      stock: Math.max(0, parseInt(String(body?.stock ?? 0), 10) || 0),
+      minStock: Math.max(0, parseInt(String(body?.minStock ?? 0), 10) || 0),
+      unit: body?.unit || "pieza",
+      active: body?.active !== false,
+      featured: Boolean(body?.featured),
     });
 
-    return NextResponse.json(product, { status: 201 });
+    return NextResponse.json(result, { status: 201 });
   } catch (error) {
-    console.error("Create product error:", error);
-    return NextResponse.json({ error: "Error al crear producto" }, { status: 500 });
+    const response = adminGatewayResponse(error);
+    return NextResponse.json(response.body, { status: response.status });
   }
 }
