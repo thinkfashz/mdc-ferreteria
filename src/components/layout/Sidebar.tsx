@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { MDC_LOGO_URL, MDC_STORE_URL } from "@/lib/brand";
 import {
   LayoutDashboard,
   Package,
@@ -39,10 +40,10 @@ export default function Sidebar() {
     <>
       <button
         onClick={() => setMobileOpen(true)}
-        className="fixed top-4 left-4 z-40 lg:hidden bg-[#F97316] text-[#0d0d0d] p-2 rounded-lg shadow-lg"
+        className="fixed top-4 left-4 z-40 lg:hidden bg-[#F97316] text-[#0d0d0d] p-2.5 rounded-xl shadow-lg"
         aria-label="Abrir menú"
       >
-        <Menu className="w-5 h-5" />
+        <Menu className="w-6 h-6" />
       </button>
 
       {mobileOpen && (
@@ -58,19 +59,24 @@ export default function Sidebar() {
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex items-center gap-3 px-5 py-5 border-b border-card">
-          <div className="w-10 h-10 bg-[#F97316] rounded-xl flex items-center justify-center font-bold text-lg text-[#0d0d0d]">
-            MDC
+        <div className="flex items-center gap-3 px-4 py-5 border-b border-card min-h-[86px]">
+          <div className="w-[104px] flex-shrink-0">
+            <img
+              src={MDC_LOGO_URL}
+              alt="MDC Ferretería"
+              className="w-full h-auto object-contain drop-shadow-[0_0_16px_rgba(249,115,22,0.25)]"
+            />
           </div>
-          <div>
-            <h1 className="font-bold text-sm text-main">MDC Ferretería</h1>
-            <p className="text-xs text-muted">Sistema de Gestión</p>
+          <div className="min-w-0">
+            <h1 className="font-bold text-sm text-main truncate">MDC Ferretería</h1>
+            <p className="text-xs text-muted truncate">Sistema de Gestión</p>
           </div>
           <button
             onClick={() => setMobileOpen(false)}
-            className="ml-auto lg:hidden p-1 hover:bg-[var(--hover-soft)] rounded"
+            className="ml-auto lg:hidden p-2 hover:bg-[var(--hover-soft)] rounded-lg"
+            aria-label="Cerrar menú"
           >
-            <X className="w-4 h-4 text-muted" />
+            <X className="w-5 h-5 text-muted" />
           </button>
         </div>
 
@@ -83,7 +89,7 @@ export default function Sidebar() {
                 href={item.href}
                 onClick={() => setMobileOpen(false)}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
+                  "flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all",
                   isActive
                     ? "bg-accent-soft text-accent"
                     : "text-muted hover:bg-[var(--hover-soft)] hover:text-main"
@@ -99,17 +105,17 @@ export default function Sidebar() {
 
         <div className="px-3 py-4 border-t border-card space-y-1">
           <a
-            href="http://localhost:3002"
+            href={MDC_STORE_URL}
             target="_blank"
             rel="noopener"
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-muted hover:bg-[var(--hover-soft)] hover:text-main transition-colors"
+            className="flex items-center gap-3 w-full px-3 py-3 rounded-xl text-sm font-medium text-muted hover:bg-[var(--hover-soft)] hover:text-main transition-colors"
           >
             <Store className="w-5 h-5" />
             <span>Ver Tienda</span>
           </a>
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-muted hover:bg-[var(--hover-soft)] hover:text-main transition-colors"
+            className="flex items-center gap-3 w-full px-3 py-3 rounded-xl text-sm font-medium text-muted hover:bg-[var(--hover-soft)] hover:text-main transition-colors"
           >
             <LogOut className="w-5 h-5" />
             <span>Cerrar Sesión</span>
