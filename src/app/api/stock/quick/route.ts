@@ -7,11 +7,12 @@ export async function POST(req: Request) {
     const body = await req.json();
     const code = String(body?.code || "").trim().slice(0, 160);
     const name = String(body?.name || "").trim().slice(0, 180);
+    const productId = String(body?.productId || "").trim();
     const quantity = Math.floor(Number(body?.quantity || 1));
     const type = body?.type === "out" ? "out" : "in";
 
-    if (!code && !name) {
-      return NextResponse.json({ error: "Código o nombre es requerido" }, { status: 400 });
+    if (!code && !name && !productId) {
+      return NextResponse.json({ error: "Código, producto o nombre es requerido" }, { status: 400 });
     }
     if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 9999) {
       return NextResponse.json({ error: "Cantidad inválida" }, { status: 400 });
@@ -20,10 +21,11 @@ export async function POST(req: Request) {
     const productPayload: Record<string, unknown> = {
       code,
       name,
+      productId,
       slug: name ? slugify(name) : "",
       quantity,
       type,
-      reason: body?.reason ? String(body.reason).trim().slice(0, 500) : `Scanner: ${code || name}`,
+      reason: body?.reason ? String(body.reason).trim().slice(0, 500) : `Scanner: ${code || name || productId}`,
       unit: body?.unit ? String(body.unit).trim().slice(0, 40) : "pieza",
     };
 
