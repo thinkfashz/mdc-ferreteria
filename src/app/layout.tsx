@@ -1,10 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Providers from "@/components/layout/Providers";
+import BrandLoader from "@/components/layout/BrandLoader";
 
 export const metadata: Metadata = {
-  title: "MDC - Sistema de Gesti\u00f3n",
-  description: "Plataforma de gesti\u00f3n de productos, inventario y stock",
+  title: "MDC - Sistema de Gestión",
+  description: "Plataforma de gestión de productos, inventario y stock",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -29,7 +30,10 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className="min-h-screen bg-page">
-        <Providers>{children}</Providers>
+        <Providers>
+          <BrandLoader />
+          {children}
+        </Providers>
       </body>
     </html>
   );
