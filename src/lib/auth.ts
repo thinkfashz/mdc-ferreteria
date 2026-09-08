@@ -1,44 +1,25 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/prisma";
 import { callMdcRpc } from "@/lib/supabase-public";
 
-type AdminUser = {
+type AdminLogin = {
   id: string;
   email: string;
   name?: string | null;
   role: string;
+  token: string;
+  expiresAt: string;
 };
 
-function hasDirectDatabase() {
-  return Boolean(
-    process.env.DATABASE_URL?.trim() ||
-      process.env.POSTGRES_PRISMA_URL?.trim() ||
-      process.env.POSTGRES_URL?.trim(),
-  );
-}
-
-async function findAdmin(email: string, password: string): Promise<AdminUser | null> {
-  if (hasDirectDatabase()) {
-    try {
-      const user = await prisma.user.findUnique({ where: { email } });
-      if (user && user.role === "admin" && (await bcrypt.compare(password, user.password))) {
-        return { id: user.id, email: user.email, name: user.name, role: user.role };
-      }
-    } catch (error) {
-      console.warn("Prisma auth no disponible; usando Supabase RPC.", error instanceof Error ? error.message : "error");
-    }
-  }
-
+async function findAdmin(email: string, password: string): Promise<AdminLogin | null> {
   try {
-    const rows = await callMdcRpc<AdminUser[]>("mdc_admin_verify", {
+    const rows = await callMdcRpc<AdminLogin[]>("mdc_admin_login", {
       p_email: email,
       p_password: password,
     });
-    return Array.isArray(rows) && rows[0] ? rows[0] : null;
+    return Array.isArray(rows) && rows[0]?.token ? rows[0] : null;
   } catch (error) {
-    console.error("Supabase admin auth error:", error instanceof Error ? error.message : "error");
+    console.error("Supabase admin login error:", error instanceof Error ? error.message : "error");
     return null;
   }
 }
@@ -64,17 +45,28 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           email: user.email,
           name: user.name,
           role: user.role,
+          adminToken: user.token,
+          adminTokenExpiresAt: user.expiresAt,
         };
       },
     }),
   ],
-  session: { strategy: "jwt" },
+  session: { strategy: "jwt", maxAge: 8 * 60 * 60 },
   pages: {
     signIn: "/login",
   },
   callbacks: {
     async jwt({ token, user }) {
-      if (user) token.role = (user as { role?: string }).role;
+      if (user) {
+        const admin = user as {
+          role?: string;
+          adminToken?: string;
+          adminTokenExpiresAt?: string;
+        };
+        token.role = admin.role;
+        token.adminToken = admin.adminToken;
+        token.adminTokenExpiresAt = admin.adminTokenExpiresAt;
+      }
       return token;
     },
     async session({ session, token }) {
@@ -82,7 +74,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         (session.user as { role?: string }).role = token.role as string;
         (session.user as { id?: string }).id = token.sub;
       }
-      return session;
+      const adminSession = session as typeof session & {
+        adminToken?: string;
+        adminTokenExpiresAt?: string;
+      };
+      adminSession.adminToken = token.adminToken as string | undefined;
+      adminSession.adminTokenExpiresAt = token.adminTokenExpiresAt as string | undefined;
+      return adminSession;
     },
   },
 });
