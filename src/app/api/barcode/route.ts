@@ -10,6 +10,7 @@ interface BarcodeResult {
   description: string;
   imageUrl: string;
   category: string;
+  categoryId?: string | null;
   local: boolean;
   productId?: string | null;
   stock?: number | null;
@@ -26,6 +27,7 @@ interface LocalProduct {
   sku?: string | null;
   stock?: number | null;
   price?: number | null;
+  categoryId?: string | null;
   category?: { name?: string | null } | null;
 }
 
@@ -37,6 +39,7 @@ const EMPTY: Omit<BarcodeResult, "code"> = {
   description: "",
   imageUrl: "",
   category: "",
+  categoryId: null,
   local: false,
   productId: null,
   stock: null,
@@ -58,17 +61,12 @@ async function fetchWithTimeout(url: string, timeout = 3000): Promise<Response |
   }
 }
 
-function remoteResult(
-  code: string,
-  source: string,
-  values: Partial<BarcodeResult>,
-): BarcodeResult | null {
+function remoteResult(code: string, source: string, values: Partial<BarcodeResult>): BarcodeResult | null {
   const name = String(values.name || "").trim();
   const brand = String(values.brand || "").trim();
   const description = String(values.description || "").trim();
   const imageUrl = String(values.imageUrl || "").trim();
   const category = String(values.category || "").trim();
-
   if (!name && !brand && !description && !imageUrl) return null;
   return {
     found: true,
@@ -79,6 +77,7 @@ function remoteResult(
     description: description || name,
     imageUrl,
     category,
+    categoryId: null,
     local: false,
     productId: null,
     stock: null,
@@ -101,11 +100,7 @@ async function searchUPCItemDB(code: string): Promise<BarcodeResult | null> {
   });
 }
 
-async function searchOpenFacts(
-  code: string,
-  host: string,
-  source: string,
-): Promise<BarcodeResult | null> {
+async function searchOpenFacts(code: string, host: string, source: string): Promise<BarcodeResult | null> {
   const res = await fetchWithTimeout(`https://${host}/api/v2/product/${encodeURIComponent(code)}.json`);
   if (!res?.ok) return null;
   const data = await res.json().catch(() => null);
@@ -135,19 +130,11 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const code = String(searchParams.get("code") || "").trim();
 
-  if (!code) {
-    return NextResponse.json({ error: "Código requerido" }, { status: 400 });
-  }
-  if (!/^[0-9A-Za-z\-_.]{4,64}$/.test(code)) {
-    return NextResponse.json({ ...EMPTY, code });
-  }
+  if (!code) return NextResponse.json({ error: "Código requerido" }, { status: 400 });
+  if (!/^[0-9A-Za-z\-_.]{4,64}$/.test(code)) return NextResponse.json({ ...EMPTY, code });
 
   try {
-    /* Primero MDC: respuesta inmediata y sin consumir cuotas externas. */
-    const local = await adminFunctionRpc<LocalProduct | null>("mdc_admin_product_lookup", {
-      p_code: code,
-    });
-
+    const local = await adminFunctionRpc<LocalProduct | null>("mdc_admin_product_lookup", { p_code: code });
     if (local?.id) {
       return NextResponse.json({
         found: true,
@@ -158,29 +145,22 @@ export async function GET(req: Request) {
         description: local.description || "",
         imageUrl: local.imageUrl || "",
         category: local.category?.name || "",
+        categoryId: local.categoryId || null,
         local: true,
         productId: local.id,
         stock: Number(local.stock ?? 0),
         price: Number(local.price ?? 0),
-      } satisfies BarcodeResult, {
-        headers: { "Cache-Control": "private, no-store" },
-      });
+      } satisfies BarcodeResult, { headers: { "Cache-Control": "private, no-store" } });
     }
 
-    /*
-     * Las bases públicas se consultan en paralelo. Antes se esperaba una por una,
-     * pudiendo sumar varios timeouts. Ahora el tiempo total queda acotado al
-     * proveedor más lento (~3 s) y elegimos el resultado con más información.
-     */
-    const searches = [
+    const settled = await Promise.allSettled([
       searchUPCItemDB(code),
       searchOpenFacts(code, "world.openproductsfacts.org", "Open Products Facts"),
       searchOpenFacts(code, "world.openfoodfacts.org", "Open Food Facts"),
       searchOpenFacts(code, "world.openbeautyfacts.org", "Open Beauty Facts"),
       searchOpenFacts(code, "world.openpetfoodfacts.org", "Open Pet Food Facts"),
-    ];
+    ]);
 
-    const settled = await Promise.allSettled(searches);
     const candidates = settled
       .filter((entry): entry is PromiseFulfilledResult<BarcodeResult | null> => entry.status === "fulfilled")
       .map((entry) => entry.value)
@@ -188,15 +168,8 @@ export async function GET(req: Request) {
       .sort((a, b) => resultScore(b) - resultScore(a));
 
     const best = candidates[0];
-    if (best) {
-      return NextResponse.json(best, {
-        headers: { "Cache-Control": "private, max-age=300" },
-      });
-    }
-
-    return NextResponse.json({ ...EMPTY, code }, {
-      headers: { "Cache-Control": "private, max-age=60" },
-    });
+    if (best) return NextResponse.json(best, { headers: { "Cache-Control": "private, max-age=300" } });
+    return NextResponse.json({ ...EMPTY, code }, { headers: { "Cache-Control": "private, max-age=60" } });
   } catch (error) {
     const response = adminGatewayResponse(error);
     return NextResponse.json(response.body, { status: response.status });
