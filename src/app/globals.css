@@ -15,7 +15,6 @@
 }
 
 /* ===== Tokens semánticos de tema (estilo landing) ===== */
-/* Oscuro (default) */
 :root {
   --bg-page: #0d0d0d;
   --bg-section: #131313;
@@ -23,7 +22,7 @@
   --bg-card-2: #181818;
   --bg-input: #101010;
   --text-main: #f5f3ef;
-  --text-soft: #d8d4cd;   /* cálido como la landing */
+  --text-soft: #d8d4cd;
   --text-muted: #a3a09a;
   --text-dim: #75716a;
   --accent: #F97316;
@@ -37,7 +36,6 @@
   --danger: #ef4444;
 }
 
-/* Claro */
 html.tema-claro {
   --bg-page: #f6f5f2;
   --bg-section: #ffffff;
@@ -56,11 +54,8 @@ html.tema-claro {
   --hover-soft: rgba(0, 0, 0, 0.04);
 }
 
-* {
-  -webkit-tap-highlight-color: transparent;
-}
+* { -webkit-tap-highlight-color: transparent; }
 
-/* ===== Utilidades de tema ===== */
 .bg-page { background-color: var(--bg-page); }
 .bg-section { background-color: var(--bg-section); }
 .bg-card { background-color: var(--bg-card); }
@@ -79,14 +74,12 @@ html.tema-claro {
 .input-theme { background-color: var(--input-bg); }
 .hover-soft:hover { background-color: var(--hover-soft); }
 
-/* Anillo de foco naranja consistente */
 .focus-mdc:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
-/* ===== Splash screen keyframes ===== */
 @keyframes splash-in {
   0% { opacity: 0; transform: scale(0.85); }
   100% { opacity: 1; transform: scale(1); }
@@ -99,7 +92,6 @@ html.tema-claro {
   0% { width: 0%; }
   100% { width: 100%; }
 }
-/* respeto preferencias de accesibilidad */
 @media (prefers-reduced-motion: reduce) {
   .animate-\[splash-in_0\.7s_ease-out\],
   .animate-\[splash-up_0\.9s_ease-out\],
@@ -108,52 +100,152 @@ html.tema-claro {
   }
 }
 
-/* Logo del footer: sobre fondo claro usa variante light */
 html.tema-claro .footer-logo { content: url("/logo-mdc-light.png"); }
 
-/* Texto sobre imágenes (hero, despacho, login): siempre blanco por el overlay oscuro */
 .hero-texto,
 .despacho-texto,
-.login-branding {
-  color: #ffffff;
-}
+.login-branding { color: #ffffff; }
 html.tema-claro .hero-texto .text-soft,
 html.tema-claro .hero-texto p,
-html.tema-claro .despacho-texto p {
-  color: rgba(255, 255, 255, 0.85);
-}
+html.tema-claro .despacho-texto p { color: rgba(255, 255, 255, 0.85); }
 
 html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-body {
-  font-family: system-ui, -apple-system, sans-serif;
-}
+body { font-family: system-ui, -apple-system, sans-serif; }
 
-::-webkit-scrollbar {
-  width: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--bg-section);
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(249, 115, 22, 0.5);
-}
-
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-section); }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(249, 115, 22, 0.5); }
 html.tema-claro ::-webkit-scrollbar-track { background: #eceae6; }
 html.tema-claro ::-webkit-scrollbar-thumb { background: #c9c4bd; }
 html.tema-claro ::-webkit-scrollbar-thumb:hover { background: #aba59d; }
 
-/* ===== App nativa: espacio para TabBar en móvil ===== */
 @media (max-width: 1023px) {
   body { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* ===== Loader de marca compartida con la tienda ===== */
+@keyframes mdc-admin-progress {
+  from { transform: scaleX(.025); }
+  to { transform: scaleX(1); }
+}
+@keyframes mdc-admin-truck {
+  from { left: 0; transform: translateY(-50%); }
+  to { left: calc(100% - 92px); transform: translateY(-50%); }
+}
+@keyframes mdc-admin-wheel {
+  to { transform: rotate(360deg); }
+}
+
+.mdc-admin-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: #fff;
+  background:
+    radial-gradient(circle at 42% 38%, rgba(249,115,22,.18), transparent 31%),
+    radial-gradient(circle at 78% 68%, rgba(234,88,12,.12), transparent 28%),
+    rgba(9,9,9,.96);
+  backdrop-filter: blur(20px) saturate(.92);
+  -webkit-backdrop-filter: blur(20px) saturate(.92);
+  animation: mdc-loader-fade-in .13s ease-out both;
+}
+@keyframes mdc-loader-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+.mdc-admin-loader-glow {
+  position: absolute;
+  width: 52vw;
+  height: 52vw;
+  max-width: 560px;
+  max-height: 560px;
+  border-radius: 50%;
+  background: rgba(249,115,22,.08);
+  filter: blur(64px);
+  pointer-events: none;
+}
+
+.mdc-admin-loader-inner {
+  position: relative;
+  width: min(88vw, 560px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.mdc-admin-loader-logo {
+  width: min(54vw, 265px);
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 0 24px rgba(249,115,22,.32));
+  margin-bottom: 28px;
+}
+
+.mdc-admin-loader-stage {
+  position: relative;
+  width: 100%;
+  height: 76px;
+  margin-bottom: 24px;
+}
+
+.mdc-admin-loader-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 12px;
+  transform: translateY(-50%);
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 999px;
+  background: rgba(0,0,0,.65);
+  box-shadow: inset 0 0 16px rgba(0,0,0,.5), 0 0 20px rgba(249,115,22,.05);
+}
+
+.mdc-admin-loader-progress {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  background: linear-gradient(90deg,#e85d04,#ff7a18 55%,#ff9c4b);
+  box-shadow: 0 0 18px rgba(249,115,22,.5);
+  animation: mdc-admin-progress .72s cubic-bezier(.25,.75,.25,1) both;
+}
+
+.mdc-admin-loader-truck {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 92px;
+  transform: translateY(-50%);
+  animation: mdc-admin-truck .72s cubic-bezier(.25,.75,.25,1) both;
+  filter: drop-shadow(0 8px 8px rgba(0,0,0,.45));
+}
+.mdc-admin-loader-truck img { display: block; width: 100%; height: auto; object-fit: contain; }
+
+.mdc-admin-loader strong { font-size: clamp(22px,5vw,31px); line-height: 1.05; }
+.mdc-admin-loader span { margin-top: 9px; color: #c8c1b8; font-size: 14px; }
+.mdc-admin-loader small { margin-top: 18px; color: #8e877f; font-size: 10px; font-weight: 800; letter-spacing: .22em; text-transform: uppercase; }
+
+@media (max-width: 520px) {
+  .mdc-admin-loader-inner { width: 88vw; }
+  .mdc-admin-loader-logo { width: min(62vw, 240px); margin-bottom: 22px; }
+  .mdc-admin-loader-stage { height: 70px; }
+  .mdc-admin-loader-track { height: 15px; }
+  .mdc-admin-loader-truck { width: 88px; }
+  @keyframes mdc-admin-truck {
+    from { left: 0; transform: translateY(-50%); }
+    to { left: calc(100% - 88px); transform: translateY(-50%); }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mdc-admin-loader-progress { animation-duration: .18s; }
+  .mdc-admin-loader-truck { animation-duration: .18s; }
 }
